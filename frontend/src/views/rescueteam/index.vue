@@ -2,136 +2,145 @@
   <section class="page" data-module="rescueteam">
     <header class="page-head">
       <div>
-        <h2>抢险队调度管理</h2>
-        <p class="page-desc">维护抢险任务，围绕任务编号、任务类型、目标点位、抢险队做登记、筛选与状态流转。</p>
+        <h2>抢险队归队看板</h2>
+        <p class="page-desc">
+          本看板不再自行推算先后：内涝退水结论落入对应抢险队的待归队清单，优先级取退水当时的统一算法快照；
+          原记录保持当时结论，不随算法调整重算。
+        </p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记抢险任务</button>
-        <button class="btn" type="button" @click="exportRows">导出抢险队调度清单</button>
+        <RouterLink class="btn" to="/waterlog">前往派队队列</RouterLink>
       </div>
     </header>
 
     <div class="stat-row">
-      <article v-for="item in stats" :key="item.label" class="stat-card">
-        <span class="stat-label">{{ item.label }}</span>
-        <strong class="stat-value">{{ item.value }}</strong>
+      <article class="stat-card">
+        <span class="stat-label">待归队</span>
+        <strong class="stat-value warn">{{ waiting.length }}</strong>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">已归队（历史归档）</span>
+        <strong class="stat-value">{{ returned.length }}</strong>
       </article>
     </div>
 
-    <p class="status-legend">
-      <span v-for="item in statusSummary" :key="item.status" class="legend-item">
-        {{ item.status }}：{{ item.count }}
-      </span>
-    </p>
+    <section class="queue-block">
+      <h3 class="block-title warn-title">待归队清单（内涝退水结论落入）</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>退水顺位</th>
+            <th>内涝编号</th>
+            <th>目标点位</th>
+            <th>抢险队</th>
+            <th>退水时优先级</th>
+            <th>算法版本</th>
+            <th>退水时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(task, index) in waiting" :key="task.id">
+            <td>{{ index + 1 }}</td>
+            <td><RouterLink class="link" :to="`/waterlog/${encodeURIComponent(task.waterlogCode)}`">{{ task.waterlogCode }}</RouterLink></td>
+            <td>{{ task.site }}</td>
+            <td>{{ task.team }}</td>
+            <td>
+              <span class="prio-badge" :class="`prio-${task.prioritySnapshot.level}`">{{ task.prioritySnapshot.level }}</span>
+              <span class="score">{{ task.prioritySnapshot.rankScore }}分</span>
+            </td>
+            <td><span class="version">{{ task.prioritySnapshot.algoVersion }}</span></td>
+            <td>{{ task.recededAt }}</td>
+            <td class="row-actions">
+              <button class="link" type="button" @click="confirm(task.id)">确认归队</button>
+            </td>
+          </tr>
+          <tr v-if="!waiting.length">
+            <td colspan="8" class="empty-state">暂无待归队抢险任务</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
-    <form class="filter-bar" @submit.prevent="reload">
-      <label v-for="field in filterFields" :key="field" class="filter-item">
-        <span>{{ field }}</span>
-        <input v-model="filters[field]" :placeholder="`按${field}检索`" />
-      </label>
-      <button class="btn" type="submit">查询</button>
-      <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
-    </form>
+    <section class="queue-block">
+      <h3 class="block-title">已归队记录（保持退水当时结论，不重算）</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>内涝编号</th>
+            <th>目标点位</th>
+            <th>抢险队</th>
+            <th>退水时优先级</th>
+            <th>算法版本</th>
+            <th>退水时间</th>
+            <th>归队时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="task in returned" :key="task.id">
+            <td><RouterLink class="link" :to="`/waterlog/${encodeURIComponent(task.waterlogCode)}`">{{ task.waterlogCode }}</RouterLink></td>
+            <td>{{ task.site }}</td>
+            <td>{{ task.team }}</td>
+            <td>
+              <span class="prio-badge" :class="`prio-${task.prioritySnapshot.level}`">{{ task.prioritySnapshot.level }}</span>
+              <span class="score">{{ task.prioritySnapshot.rankScore }}分</span>
+            </td>
+            <td><span class="version">{{ task.prioritySnapshot.algoVersion }}</span></td>
+            <td>{{ task.recededAt }}</td>
+            <td>{{ task.returnedAt }}</td>
+          </tr>
+          <tr v-if="!returned.length">
+            <td colspan="7" class="empty-state">暂无已归队历史记录</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th v-for="column in columns" :key="column">{{ column }}</th>
-          <th>当前状态</th>
-          <th>可执行动作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
-          <td>{{ row.status }}</td>
-          <td class="row-actions">
-            <button
-              v-for="action in actions"
-              :key="action"
-              class="link"
-              type="button"
-              @click="runAction(action, row)"
-            >
-              {{ action }}
-            </button>
-          </td>
-        </tr>
-        <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无抢险队调度数据，可先登记抢险任务</td>
-        </tr>
-      </tbody>
-    </table>
+    <p v-if="message" :class="messageOk ? 'ok-text' : 'error-text'">{{ message }}</p>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条抢险队调度记录</span>
-      <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span>看板只读取内涝退水落入的结论，不重新派队；顺序、分值与列表、详情完全一致</span>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 
-import {
-  downloadEntries,
-  listEntries,
-  moduleMeta,
-  runAction as applyAction,
-} from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import { confirmReturn, recallBoard } from '@/domain/waterlog'
+import type { RecallTask } from '@/domain/waterlog'
 
-const meta = moduleMeta('rescueteam')
-const columns = ["任务编号", "任务类型", "目标点位", "抢险队", "出队时间", "归队时间", "负责人", "任务状态"]
-const actions = ["派出抢险", "确认归队", "终止任务"]
-const statuses = ["待派队", "抢险中", "已归队", "已终止"]
-const stats = [{"label": "待派队任务", "value": 0}, {"label": "抢险中任务", "value": 0}, {"label": "已归队任务", "value": 0}]
-
-const rows = ref<EntryRow[]>([])
-const total = ref(0)
-const errorMessage = ref('')
-const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
-const statusSummary = computed(() =>
-  statuses.map((status: string) => ({
-    status,
-    count: rows.value.filter((row) => String(row.status) === status).length,
-  })),
-)
-
-function resetFilters() {
-  filters.value = {}
-  reload()
-}
-
-function exportRows() {
-  downloadEntries(meta.key)
-}
-
-function openCreate() {
-  errorMessage.value = '抢险任务登记入口尚未接入审批流'
-}
-
-function runAction(action: string, row: EntryRow) {
-  errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
-  if (!result.ok) {
-    errorMessage.value = result.message
-    return
-  }
-  reload()
-}
+const waiting = ref<RecallTask[]>([])
+const returned = ref<RecallTask[]>([])
+const message = ref('')
+const messageOk = ref(true)
 
 function reload() {
-  errorMessage.value = ''
-  try {
-    const payload = listEntries(meta.key, filters.value)
-    rows.value = payload.items
-    total.value = payload.total
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '抢险队调度列表读取失败'
-  }
+  const board = recallBoard()
+  waiting.value = board.waiting
+  returned.value = board.returned
+}
+
+function confirm(id: number) {
+  const result = confirmReturn(id)
+  message.value = result.message
+  messageOk.value = result.ok
+  reload()
 }
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.queue-block { margin: 16px 0 8px; }
+.block-title { font-size: 14px; margin: 0 0 8px; }
+.warn-title { color: #b54708; }
+.score { margin-left: 6px; color: var(--muted); font-size: 12px; }
+.version { font-size: 11px; color: var(--muted); background: #eef2f7; border-radius: 4px; padding: 1px 6px; }
+.warn { color: #b54708; }
+.ok-text { color: #067647; font-size: 13px; }
+.prio-badge { display: inline-block; min-width: 30px; text-align: center; border-radius: 6px; padding: 2px 6px; font-weight: 600; font-size: 12px; color: #fff; }
+.prio-P1 { background: #d92d20; }
+.prio-P2 { background: #f79009; }
+.prio-P3 { background: #12b76a; }
+</style>
