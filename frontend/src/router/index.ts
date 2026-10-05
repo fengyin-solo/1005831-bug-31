@@ -9,6 +9,7 @@ const Dredge = () => import('@/views/dredge/index.vue')
 const Waterlevel = () => import('@/views/waterlevel/index.vue')
 const Rainfall = () => import('@/views/rainfall/index.vue')
 const Waterlog = () => import('@/views/waterlog/index.vue')
+const WaterlogDetail = () => import('@/views/waterlog/detail.vue')
 const Floodgate = () => import('@/views/floodgate/index.vue')
 const Pumpmaint = () => import('@/views/pumpmaint/index.vue')
 const Sluice = () => import('@/views/sluice/index.vue')
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/waterlevel', name: 'waterlevel', component: Waterlevel },
     { path: '/rainfall', name: 'rainfall', component: Rainfall },
     { path: '/waterlog', name: 'waterlog', component: Waterlog },
+    { path: '/waterlog/:code', name: 'waterlog-detail', component: WaterlogDetail },
     { path: '/floodgate', name: 'floodgate', component: Floodgate },
     { path: '/pumpmaint', name: 'pumpmaint', component: Pumpmaint },
     { path: '/sluice', name: 'sluice', component: Sluice },

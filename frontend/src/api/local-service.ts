@@ -29,6 +29,13 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
 }
 
 export function runAction(key: string, id: number, action: string): ActionResult {
+  // 内涝与抢险队已收拢到 domain/waterlog 的单一实现，通用动作入口不得旁路改状态。
+  if (key === 'waterlog' || key === 'rescueteam') {
+    return {
+      ok: false,
+      message: '该模块的状态流转由统一派队处置接口处理，请使用内涝处置 / 归队看板上的操作',
+    }
+  }
   const meta = moduleMeta(key)
   const target = meta.actionTargets[action]
   if (!target) {
